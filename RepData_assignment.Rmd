@@ -1,0 +1,73 @@
+---
+title: "Storm Data"
+author: "Oleg Nizhnikov"
+date: "23.10.2015"
+output:
+  html_document:
+    keep_md: yes
+---
+
+
+reading file
+```{r, message=FALSE}
+library(R.utils)
+library(dplyr)
+```
+```{r, cache=TRUE}
+storm.head <- read.csv("stormData.csv.bz2", nrows = 100)
+
+storm.classes <- sapply(storm.head, class)
+storm.classes["BGN_TIME"] <- "character"
+storm.classes["F"] <- "factor"
+
+storm.classes[storm.classes == "logical"] = "factor"
+
+multiplier <- function(letter) 
+  ifelse( letter == "K", 1e3,
+  ifelse( letter == "M", 1e6,
+  ifelse( letter == "B", 1e9,
+  1)))
+
+storm.by.type <- read.csv("stormData.csv.bz2", 
+                          colClasses = storm.classes) %>% 
+  group_by(EVTYPE) %>%
+  mutate(
+    PROPDMG = PROPDMG * multiplier(PROPDMGEXP), 
+    CROPDMG = CROPDMG * multiplier(CROPDMGEXP)
+  ) %>%
+  summarise(
+    mean.injuries   = mean(INJURIES, na.rm = TRUE),
+    mean.fatalities = mean(FATALITIES, na.rm = TRUE),
+    mean.propdmg    = mean(PROPDMG, na.rm = TRUE),
+    mean.cropdmg    = mean(CROPDMG, na.rm = TRUE),
+    
+    sum.injuries   = sum(INJURIES, na.rm = TRUE),
+    sum.fatalities = sum(FATALITIES, na.rm = TRUE),
+    sum.propdmg    = sum(PROPDMG, na.rm = TRUE),
+    sum.cropdmg    = sum(CROPDMG, na.rm = TRUE)
+    )
+```
+
+```{r}
+library(ggplot2)
+library(tidyr)
+storm.dmg <- storm.by.type %>% 
+  select(type = EVTYPE,
+         crop = sum.cropdmg, 
+         property = sum.propdmg) %>%
+  mutate(total = crop + property) %>%
+  arrange(total) %>%
+  tail(n = 10) %>%
+  gather(kind, damage, c(crop, property, total))
+
+summary(storm.dmg)
+  
+ggplot(storm.dmg, aes(type, damage / 1e6)) +
+  ylab("Damage, Million $") +
+  geom_bar( stat = "identity",
+            aes(fill = type)) +
+  facet_grid(kind ~ .) +
+  scale_x_discrete(expand = c(0,0)) +
+  theme_bw()
+```
+
