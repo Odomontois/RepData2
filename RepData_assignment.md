@@ -1,9 +1,23 @@
-# Storm Data
-Oleg Nizhnikov  
-23.10.2015  
+# Health and Economic damage of Storms in the United States
+Oleg Nizhnik  
+25.10.2015  
 
+## Synopsis
 
-reading file
+This research based on U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. Data on different kind of major storms and weather events is summarized and analyzed to find out which event types have the most dramatic health and economic damage.
+
+## Data Processing
+
+Data collected from [this link][1].  
+We will read whole CSV, gather 4 most interesting characteristics:
+
+| No | Name                                 | Stored in Column  | Multiplier in Column   |
+|---:|:------------------------------------:|:-----------------:|:----------------------:|
+| 1  |**Property Damage**                   | `PROPDMG`         | `PROPDMGEXP`           |
+| 2  |**Crops Damage**                      | `CROPDMG`         | `CROPDMGEXP`           |
+| 3  |**Count of non-lethal health damage** | `INJURIES`        | **-**                  |
+| 4  |**Count of lethal health damage**     | `FATALITIES`      | **-**                  |
+
 
 ```r
 library(R.utils)
@@ -45,23 +59,12 @@ storm.by.type <- read.csv("stormData.csv.bz2",
     )
 ```
 
+## Visual Analysis
+We will collect 10 most harmful storm types depending on economic and health losses
 
 ```r
-library(ggplot2)
 library(tidyr)
-```
-
-```
-## 
-## Attaching package: 'tidyr'
-## 
-## The following object is masked from 'package:R.utils':
-## 
-##     extract
-```
-
-```r
-storm.dmg <- storm.by.type %>% 
+storm.economic <- storm.by.type %>% 
   select(type = EVTYPE,
          crop = sum.cropdmg, 
          property = sum.propdmg) %>%
@@ -70,29 +73,62 @@ storm.dmg <- storm.by.type %>%
   tail(n = 10) %>%
   gather(kind, damage, c(crop, property, total))
 
-summary(storm.dmg)
+storm.health <- storm.by.type %>%
+  select(type = EVTYPE, 
+         injuries = sum.injuries, 
+         fatalities = sum.fatalities) %>%
+  mutate(total = injuries + fatalities) %>%
+  arrange(total) %>%
+  tail(n = 10) %>%
+  gather(kind, damage, c(injuries, fatalities, total))
 ```
-
-```
-##                 type          kind        damage         
-##  DROUGHT          : 3   crop    :10   Min.   :5.000e+03  
-##  FLASH FLOOD      : 3   property:10   1st Qu.:4.214e+09  
-##  FLOOD            : 3   total   :10   Median :1.292e+10  
-##  HAIL             : 3                 Mean   :2.720e+10  
-##  HURRICANE        : 3                 3rd Qu.:3.718e+10  
-##  HURRICANE/TYPHOON: 3                 Max.   :1.503e+11  
-##  (Other)          :12
-```
+And prepare visual tools for those
 
 ```r
-ggplot(storm.dmg, aes(type, damage / 1e6)) + 
-  geom_bar( stat = "identity",
-            aes(fill = type)) +
-  ylab("Damage, Million $") +
-  facet_grid(kind ~ .) +
-  scale_x_discrete(expand = c(0,0)) +
-  theme_bw()
+library(ggplot2)
+
+colorful.bars <- function(plot) plot +
+    facet_grid(kind ~ .) +
+    xlab("") +
+    theme_bw() +
+    theme(axis.text.x = element_blank()) +
+    geom_bar(stat = "identity",  aes(fill = type))
+
+plot.economic <- ggplot(storm.economic, aes(type, damage / 1e9)) + ylab("Damage, Billion $") 
+
+plot.health <- ggplot(storm.health, aes(type, damage)) + ylab("Casualties")
+```
+Here we can see economic damage, respecting property damage, crop damage and sum of these
+
+```r
+colorful.bars(plot.economic)
 ```
 
-![](RepData_assignment_files/figure-html/unnamed-chunk-3-1.png) 
+![](RepData_assignment_files/figure-html/unnamed-chunk-5-1.png) 
 
+Here the health damage, differentiating lethal, non-letal and all cases
+
+
+```r
+colorful.bars(plot.health)
+```
+
+![](RepData_assignment_files/figure-html/unnamed-chunk-6-1.png) 
+
+#Results
+
+Most harmful factors are:
+
+```r
+worst.economic <- storm.economic %>% filter(kind == "total") %>% tail(n = 1) 
+worst.health <- storm.health %>% filter(kind == "total") %>% tail(n = 1)
+options(scipen = 999)
+```
+
+| Category | Event type              | Value                                    |
+|:--------:|:-----------------------:|-----------------------------------------:|
+| Economic | FLOOD | $150.3196783 billions| 
+| Health   | TORNADO   | 96979 casualties       |
+
+
+[1]:https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2

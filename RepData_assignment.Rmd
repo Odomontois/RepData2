@@ -1,14 +1,28 @@
 ---
-title: "Storm Data"
-author: "Oleg Nizhnikov"
-date: "23.10.2015"
+title: "Health and Economic damage of Storms in the United States"
+author: "Oleg Nizhnik"
+date: "25.10.2015"
 output:
   html_document:
     keep_md: yes
 ---
 
+## Synopsis
 
-reading file
+This research based on U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. Data on different kind of major storms and weather events is summarized and analyzed to find out which event types have the most dramatic health and economic damage.
+
+## Data Processing
+
+Data collected from [this link][1].  
+We will read whole CSV, gather 4 most interesting characteristics:
+
+| No | Name                                 | Stored in Column  | Multiplier in Column   |
+|---:|:------------------------------------:|:-----------------:|:----------------------:|
+| 1  |**Property Damage**                   | `PROPDMG`         | `PROPDMGEXP`           |
+| 2  |**Crops Damage**                      | `CROPDMG`         | `CROPDMGEXP`           |
+| 3  |**Count of non-lethal health damage** | `INJURIES`        | **-**                  |
+| 4  |**Count of lethal health damage**     | `FATALITIES`      | **-**                  |
+
 ```{r, message=FALSE}
 library(R.utils)
 library(dplyr)
@@ -48,10 +62,11 @@ storm.by.type <- read.csv("stormData.csv.bz2",
     )
 ```
 
-```{r}
-library(ggplot2)
+## Visual Analysis
+We will collect 10 most harmful storm types depending on economic and health losses
+```{r, message=FALSE}
 library(tidyr)
-storm.dmg <- storm.by.type %>% 
+storm.economic <- storm.by.type %>% 
   select(type = EVTYPE,
          crop = sum.cropdmg, 
          property = sum.propdmg) %>%
@@ -60,14 +75,54 @@ storm.dmg <- storm.by.type %>%
   tail(n = 10) %>%
   gather(kind, damage, c(crop, property, total))
 
-summary(storm.dmg)
-  
-ggplot(storm.dmg, aes(type, damage / 1e6)) +
-  ylab("Damage, Million $") +
-  geom_bar( stat = "identity",
-            aes(fill = type)) +
-  facet_grid(kind ~ .) +
-  scale_x_discrete(expand = c(0,0)) +
-  theme_bw()
+storm.health <- storm.by.type %>%
+  select(type = EVTYPE, 
+         injuries = sum.injuries, 
+         fatalities = sum.fatalities) %>%
+  mutate(total = injuries + fatalities) %>%
+  arrange(total) %>%
+  tail(n = 10) %>%
+  gather(kind, damage, c(injuries, fatalities, total))
+```
+And prepare visual tools for those
+```{r}
+library(ggplot2)
+
+colorful.bars <- function(plot) plot +
+    facet_grid(kind ~ .) +
+    xlab("") +
+    theme_bw() +
+    theme(axis.text.x = element_blank()) +
+    geom_bar(stat = "identity",  aes(fill = type))
+
+plot.economic <- ggplot(storm.economic, aes(type, damage / 1e9)) + ylab("Damage, Billion $") 
+
+plot.health <- ggplot(storm.health, aes(type, damage)) + ylab("Casualties")
+```
+Here we can see economic damage, respecting property damage, crop damage and sum of these
+```{r}
+colorful.bars(plot.economic)
 ```
 
+Here the health damage, differentiating lethal, non-letal and all cases
+
+```{r}
+colorful.bars(plot.health)
+```
+
+#Results
+
+Most harmful factors are:
+```{r}
+worst.economic <- storm.economic %>% filter(kind == "total") %>% tail(n = 1) 
+worst.health <- storm.health %>% filter(kind == "total") %>% tail(n = 1)
+options(scipen = 999)
+```
+
+| Category | Event type              | Value                                    |
+|:--------:|:-----------------------:|-----------------------------------------:|
+| Economic | `r worst.economic$type` | $`r worst.economic$damage / 1e9` billions| 
+| Health   | `r worst.health$type`   | `r worst.health$damage` casualties       |
+
+
+[1]:https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2
